@@ -1,59 +1,83 @@
-import {NestedTreeControl} from '@angular/cdk/tree';
-import {Component} from '@angular/core';
-import {MatTreeNestedDataSource} from '@angular/material/tree';
-
-/**
- * Food data with nested structure.
- * Each node has a name and an optiona list of children.
- */
-interface FoodNode {
-  name: string;
-  children?: FoodNode[];
+import {FlatTreeControl} from '@angular/cdk/tree';
+import {Component, Injectable} from '@angular/core';
+import {MatTreeFlatDataSource, MatTreeFlattener} from '@angular/material/tree';
+import {BehaviorSubject, Observable, of as observableOf} from 'rxjs';
+export class FileNode {
+   children: FileNode[];
+   filename: string;
+   type: any;
 }
-
-const TREE_DATA: FoodNode[] = [
-  {
-    name: 'Fruit',
-    children: [
-      {name: 'Apple'},
-      {name: 'Banana'},
-      {name: 'Fruit loops'},
-    ]
-  }, {
-    name: 'Vegetables',
-    children: [
-      {
-        name: 'Green',
-        children: [
-          {name: 'Broccoli'},
-          {name: 'Brussel sprouts'},
-        ]
-      }, {
-        name: 'Orange',
-        children: [
-          {name: 'Pumpkins'},
-          {name: 'Carrots'},
-        ]
+export class FileFlatNode {
+   constructor(
+      public expandable: boolean, public filename: string, public level: number, public type: any) {}
+}
+const TREE_DATA = JSON.stringify({
+   Documents: {
+      angular: {
+         src: {
+            compiler: 'ts',
+            core: 'ts'
+         }
       },
-    ]
-  },
-];
-
-/**
- * @title Tree with nested nodes
- */
+      material2: {
+         src: {
+            button: 'ts',
+            checkbox: 'ts',
+            input: 'ts'
+         }
+      }
+   }
+});
+@Injectable()
+export class FileDatabase {
+   dataChange = new BehaviorSubject<FileNode[]>([]);
+   get data(): FileNode[] { return this.dataChange.value; }
+   constructor() {
+      this.initialize();
+   }
+   initialize() {
+      const dataObject = JSON.parse(TREE_DATA);   
+      const data = this.buildFileTree(dataObject, 0);
+      this.dataChange.next(data);
+   } 
+   buildFileTree(obj: {[key: string]: any}, level: number): FileNode[] {
+      return Object.keys(obj).reduce<FileNode[]>((accumulator, key) => {
+         const value = obj[key];
+         const node = new FileNode();
+         node.filename = key;
+         if (value != null) {
+            if (typeof value === 'object') {
+               node.children = this.buildFileTree(value, level + 1);
+            } else {
+               node.type = value;
+            }
+         }
+         return accumulator.concat(node);
+      }, []);
+   }
+}
 @Component({
-  selector: 'tree-nested-overview-example',
-  templateUrl: 'tree-nested-overview-example.html',
-  styleUrls: ['tree-nested-overview-example.css'],
+   selector: 'app-root',
+   templateUrl: 'app.component.html',
+   styleUrls: ['app.component.css'],
+   providers: [FileDatabase]
 })
-export class TreeNestedOverviewExample {
-  treeControl = new NestedTreeControl<FoodNode>(node => node.children);
-  dataSource = new MatTreeNestedDataSource<FoodNode>();
-
-  constructor() {
-    this.dataSource.data = TREE_DATA;
-  }
-
-  hasChild = (_: number, node: FoodNode) => !!node.children && node.children.length > 0;
+export class AppComponent {
+   treeControl: FlatTreeControl<FileFlatNode>;
+   treeFlattener: MatTreeFlattener<FileNode, FileFlatNode>;
+   dataSource: MatTreeFlatDataSource<FileNode, FileFlatNode>;
+   constructor(database: FileDatabase) {
+      this.treeFlattener = new MatTreeFlattener(this.transformer, this._getLevel,
+      this._isExpandable, this._getChildren);
+      this.treeControl = new FlatTreeControl<FileFlatNode>(this._getLevel, this._isExpandable);
+      this.dataSource = new MatTreeFlatDataSource(this.treeControl, this.treeFlattener);
+      database.dataChange.subscribe(data => this.dataSource.data = data);
+   }
+   transformer = (node: FileNode, level: number) => {
+      return new FileFlatNode(!!node.children, node.filename, level, node.type);
+   }
+   private _getLevel = (node: FileFlatNode) => node.level;
+   private _isExpandable = (node: FileFlatNode) => node.expandable;
+   private _getChildren = (node: FileNode): Observable<FileNode[]> => observableOf(node.children);
+   hasChild = (_: number, _nodeData: FileFlatNode) => _nodeData.expandable;
 }

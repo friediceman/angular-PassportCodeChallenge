@@ -62,6 +62,11 @@ export class AppComponent {
    treeControl: FlatTreeControl<FileFlatNode>;
    treeFlattener: MatTreeFlattener<FileNode, FileFlatNode>;
    dataSource: MatTreeFlatDataSource<FileNode, FileFlatNode>;
+
+  /** A selected parent node to be inserted */
+  selectedParent: FileFlatNode | null = null;
+  flatNodeMap: Map<FileFlatNode, FileNode> = new Map<FileFlatNode, FileNode>();
+
    constructor(database: FileDatabase) {
       this.treeFlattener = new MatTreeFlattener(this.transformer, this._getLevel,
       this._isExpandable, this._getChildren);
@@ -76,4 +81,18 @@ export class AppComponent {
    private _isExpandable = (node: FileFlatNode) => node.expandable;
    private _getChildren = (node: FileNode): Observable<FileNode[]> => observableOf(node.children);
    hasChild = (_: number, _nodeData: FileFlatNode) => _nodeData.expandable;
+
+
+    addNewItem(node: FileFlatNode) {
+    const parentNode = this.flatNodeMap.get(node);
+    // 
+    let isParentHasChildren: boolean = false;
+    if (parentNode.children)
+      isParentHasChildren = true;
+    //
+    this.database.insertItem(parentNode!, '');
+    // expand the subtree only if the parent has children (parent is not a leaf node)
+    if (isParentHasChildren)
+      this.treeControl.expand(node);
+  }
 }
